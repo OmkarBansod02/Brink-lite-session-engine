@@ -143,19 +143,20 @@
   <!-- ── Error display ──────────────────────────────── -->
   <p id="action-error" class="action-error"></p>
 
-  <!-- ── Expandable panels ──────────────────────────── -->
-  <div class="expand-panel">
-    <div id="simulation-panel" class="panel-content"></div>
-    <div id="metrics-panel" class="panel-content"></div>
-  </div>
-
-  <!-- ── Demo controls footer ───────────────────────── -->
-  <div class="demo-controls">
-    <div class="demo-controls-inner">
-      <span class="demo-controls-label">Advanced</span>
-      <button type="button" class="btn btn-secondary" id="btn-simulate">Run simulated journeys</button>
-      <button type="button" class="btn btn-secondary" id="btn-metrics">Refresh metrics</button>
-    </div>
+  <!-- ── Developer tools (collapsed) ──────────────────── -->
+  <div class="devtools-section">
+    <details class="devtools-details">
+      <summary class="devtools-summary">Developer tools</summary>
+      <p class="devtools-helper">Optional tools for testing multiple shopper journeys and backend counters.</p>
+      <div class="devtools-buttons">
+        <button type="button" class="btn btn-secondary" id="btn-simulate">Replay sample sessions</button>
+        <button type="button" class="btn btn-secondary" id="btn-metrics">View backend metrics</button>
+      </div>
+      <div class="expand-panel">
+        <div id="simulation-panel" class="panel-content"></div>
+        <div id="metrics-panel" class="panel-content"></div>
+      </div>
+    </details>
   </div>
 
   <script src="/app.js"></script>

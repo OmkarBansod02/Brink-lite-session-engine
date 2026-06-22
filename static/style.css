@@ -588,6 +588,17 @@ code {
   color: var(--no-act);
 }
 
+.btn-apply.done {
+  background: var(--act-bg);
+  border-color: #b4dfc9;
+  color: var(--act);
+  opacity: 0.8;
+}
+
+.btn-apply.done::after {
+  content: " ✓";
+}
+
 .btn-secondary-action {
   background: var(--bg);
   font-size: 0.75rem;
@@ -657,36 +668,58 @@ code {
   display: none;
 }
 
-/* ── Demo controls footer ────────────────────────────── */
+/* ── Developer tools (collapsed) ─────────────────────── */
 
-.demo-controls {
+.devtools-section {
   max-width: 1320px;
   margin: 0 auto;
   padding: 0.5rem 1.75rem 1.5rem;
 }
 
-.demo-controls-inner {
-  display: flex;
-  flex-wrap: wrap;
-  gap: 0.35rem;
-  align-items: center;
+.devtools-details {
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  box-shadow: var(--shadow);
 }
 
-.demo-controls-label {
-  font-size: 0.65rem;
-  text-transform: uppercase;
-  letter-spacing: 0.06em;
-  color: var(--muted);
+.devtools-summary {
+  padding: 0.6rem 1rem;
+  font-size: 0.72rem;
   font-weight: 650;
-  margin-right: 0.4rem;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  color: var(--muted);
+  cursor: pointer;
+  list-style: none;
 }
 
-/* ── Expandable panels ───────────────────────────────── */
+.devtools-summary::-webkit-details-marker {
+  display: none;
+}
+
+.devtools-summary::before {
+  content: "▸ ";
+}
+
+.devtools-details[open] .devtools-summary::before {
+  content: "▾ ";
+}
+
+.devtools-helper {
+  margin: 0 1rem 0.6rem;
+  font-size: 0.78rem;
+  color: var(--muted);
+}
+
+.devtools-buttons {
+  display: flex;
+  gap: 0.35rem;
+  padding: 0 1rem 0.75rem;
+}
 
 .expand-panel {
-  max-width: 1320px;
-  margin: 0 auto;
-  padding: 0 1.75rem;
+  padding: 0 1rem 0.75rem;
 }
 
 .panel-content {

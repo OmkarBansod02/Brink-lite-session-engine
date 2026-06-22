@@ -60,7 +60,7 @@ const PRIMARY_STEPS = [
   { label: "Start session",      eventType: "product_view",       step: 1 },
   { label: "View return policy", eventType: "return_policy_view", step: 2 },
   { label: "Add to cart",        eventType: "add_to_cart",        step: 3 },
-  { label: "Simulate cart idle", eventType: "cart_idle",          step: 4 },
+  { label: "Shopper hesitates in cart", eventType: "cart_idle",   step: 4 },
   { label: "Apply recommendation", eventType: null,              step: 5, isApply: true },
   { label: "Try coupon",         eventType: "coupon_attempt",     step: 6 },
   { label: "Purchase",           eventType: "purchase",           step: 7 },
@@ -231,7 +231,12 @@ function renderDecision(decision) {
     decision.intent_level.charAt(0).toUpperCase() + decision.intent_level.slice(1);
   document.getElementById("metric-hesitation").textContent = formatHesitations(decision.hesitation_types);
   document.getElementById("metric-confidence").textContent = `${Math.round(decision.confidence * 100)}%`;
-  document.getElementById("metric-guardrail").textContent = formatGuardrail(decision.guardrail);
+  if (sessionTerminal) {
+    document.getElementById("metric-guardrail").textContent =
+      "Not evaluated — session already converted/exited";
+  } else {
+    document.getElementById("metric-guardrail").textContent = formatGuardrail(decision.guardrail);
+  }
 
   renderIntentBadge(decision.intent_level);
 
@@ -281,11 +286,16 @@ function updateApplyButton() {
   const btn = document.getElementById("btn-apply");
   if (!btn) return;
 
+  if (interventionApplied) {
+    btn.disabled = true;
+    btn.classList.add("done");
+    return;
+  }
+
   const canApply =
     latestDecision &&
     shouldAct(latestDecision) &&
     getSuggestedCopy(latestDecision) &&
-    !interventionApplied &&
     !sessionTerminal;
 
   btn.disabled = !canApply;
@@ -310,6 +320,10 @@ async function sendEvent(eventType) {
 
     const isTerminalEvent = eventType === "purchase" || eventType === "exit";
 
+    if (isTerminalEvent) {
+      sessionTerminal = true;
+    }
+
     timeline.push({
       eventType,
       label: EVENT_LABELS[eventType] || eventType,
@@ -321,7 +335,6 @@ async function sendEvent(eventType) {
     renderDecision(decision);
 
     if (isTerminalEvent) {
-      sessionTerminal = true;
       applyTerminalState();
     }
   } catch (err) {
@@ -467,6 +480,8 @@ async function handleReset() {
     document.querySelectorAll(".btn-secondary-action").forEach((b) => {
       b.disabled = false;
     });
+    const applyBtn = document.getElementById("btn-apply");
+    if (applyBtn) applyBtn.classList.remove("done");
     updateApplyButton();
   } catch (err) {
     showError(err.message);
