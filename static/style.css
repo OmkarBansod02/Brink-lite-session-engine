@@ -502,6 +502,11 @@ code {
   min-width: 240px;
 }
 
+.scenario-group-small {
+  flex: 0 1 auto;
+  min-width: auto;
+}
+
 .scenario-group-reset {
   flex: 0;
   min-width: auto;

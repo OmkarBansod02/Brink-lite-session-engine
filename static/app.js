@@ -46,8 +46,11 @@ const PRIMARY_STEPS = [
   { label: "Add to cart",        eventType: "add_to_cart",        step: 3 },
   { label: "Shopper hesitates in cart", eventType: "cart_idle",   step: 4 },
   { label: "Apply recommendation", eventType: null,              step: 5, isApply: true },
-  { label: "Try coupon",         eventType: "coupon_attempt",     step: 6 },
-  { label: "Purchase",           eventType: "purchase",           step: 7 },
+  { label: "Purchase",           eventType: "purchase",           step: 6 },
+];
+
+const GUARDRAIL_ACTIONS = [
+  { label: "Try coupon / discount guardrail", eventType: "coupon_attempt" },
 ];
 
 const SECONDARY_ACTIONS = [
@@ -435,6 +438,21 @@ function buildButtons() {
 
     primaryContainer.appendChild(btn);
   });
+
+  const guardrailContainer = document.getElementById("guardrail-buttons");
+  if (guardrailContainer) {
+    GUARDRAIL_ACTIONS.forEach(({ label, eventType }) => {
+      const btn = document.createElement("button");
+      btn.type = "button";
+      btn.className = "btn btn-secondary-action";
+      btn.disabled = true;
+      btn.textContent = label;
+      btn.addEventListener("click", async () => {
+        await sendEvent(eventType);
+      });
+      guardrailContainer.appendChild(btn);
+    });
+  }
 
   SECONDARY_ACTIONS.forEach(({ label, eventType }) => {
     const btn = document.createElement("button");
