@@ -22,7 +22,11 @@ class SessionStore:
             session.cart_value = event.cart_value
         if event.margin_pct is not None:
             session.margin_pct = event.margin_pct
-        if event.event_type == EventType.PURCHASE:
+        if event.event_type == EventType.INTERVENTION_SHOWN:
+            session.intervention_already_shown = True
+        elif event.event_type == EventType.OFFER_SHOWN:
+            session.offer_already_shown = True
+        elif event.event_type == EventType.PURCHASE:
             session.purchased = True
         elif event.event_type == EventType.EXIT:
             session.exited = True

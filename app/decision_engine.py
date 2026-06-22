@@ -53,10 +53,6 @@ class DecisionEngine:
                                   "No action: one intervention has already been shown in this session.")
 
         action, confidence, reason = self._choose_action(level, hesitations, guardrail)
-        if action != RecommendedAction.NO_ACTION:
-            session.intervention_already_shown = True
-            if action == RecommendedAction.OFFER_SMALL_DISCOUNT:
-                session.offer_already_shown = True
         return self._response(
             session, score, level, hesitations, guardrail, action, confidence, reason
         )

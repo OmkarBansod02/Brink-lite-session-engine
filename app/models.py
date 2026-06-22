@@ -16,6 +16,8 @@ class EventType(str, Enum):
     CART_IDLE = "cart_idle"
     CHECKOUT_START = "checkout_start"
     COUPON_ATTEMPT = "coupon_attempt"
+    INTERVENTION_SHOWN = "intervention_shown"
+    OFFER_SHOWN = "offer_shown"
     PURCHASE = "purchase"
     EXIT = "exit"
 
