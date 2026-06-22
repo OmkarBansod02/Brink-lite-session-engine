@@ -16,9 +16,23 @@
     <div class="header-inner">
       <h1 class="header-title">Brink Lite Session Engine</h1>
       <p class="header-subtitle">Real-time shopper decisioning from live storefront events.</p>
-      <p class="header-helper">Every click sends a real event to the Python backend via <code>POST /events</code></p>
     </div>
   </header>
+
+  <!-- ── Backend loop strip ───────────────────────────── -->
+  <div class="loop-strip">
+    <div class="loop-strip-inner">
+      <span class="loop-step">Event captured</span>
+      <span class="loop-arrow">→</span>
+      <span class="loop-step">Session memory</span>
+      <span class="loop-arrow">→</span>
+      <span class="loop-step">Intent / Hesitation</span>
+      <span class="loop-arrow">→</span>
+      <span class="loop-step">Guardrail</span>
+      <span class="loop-arrow">→</span>
+      <span class="loop-step">Storefront action</span>
+    </div>
+  </div>
 
   <!-- ── 3-card main grid ───────────────────────────── -->
   <main class="main-grid">
@@ -37,12 +51,13 @@
         <li>Fast shipping</li>
         <li>Size help available</li>
       </ul>
-      <p class="product-meta">Product ID: premium-linen-shirt · Margin: 58%</p>
 
       <div id="intervention-banner" class="intervention-banner">
-        <p class="intervention-banner-label">Shopper-facing intervention</p>
+        <p class="intervention-banner-label">Live intervention shown to shopper</p>
         <p id="intervention-banner-text" class="intervention-banner-text"></p>
       </div>
+
+      <p class="product-meta">Product ID: premium-linen-shirt · Margin: 58%</p>
     </section>
 
     <!-- Middle: Live Session Timeline -->
@@ -52,7 +67,9 @@
         <span id="intent-badge" class="intent-badge none">Intent: —</span>
         <span class="session-label" id="session-label">Local demo session</span>
       </div>
-      <ul id="event-timeline" class="timeline"></ul>
+      <div class="timeline-scroll" id="timeline-scroll">
+        <ul id="event-timeline" class="timeline"></ul>
+      </div>
       <p id="timeline-empty" class="timeline-empty">No events yet. Click "Start session" below.</p>
     </section>
 
@@ -69,6 +86,11 @@
       <p id="decision-reason" class="decision-reason">
         Send a shopper event to see the backend decision.
       </p>
+
+      <div id="decision-copy" class="decision-copy-section">
+        <p class="decision-copy-label">Suggested storefront message</p>
+        <p id="decision-copy-text" class="decision-copy-text"></p>
+      </div>
 
       <div class="decision-metrics-grid">
         <div class="decision-metric">
@@ -92,11 +114,6 @@
           <span class="decision-metric-value" id="metric-guardrail">—</span>
         </div>
       </div>
-
-      <div id="decision-copy" class="decision-copy-section">
-        <p class="decision-copy-label">Suggested shopper-facing copy</p>
-        <p id="decision-copy-text" class="decision-copy-text"></p>
-      </div>
     </section>
   </main>
 
@@ -115,6 +132,10 @@
           <div class="scenario-buttons" id="secondary-buttons"></div>
         </div>
 
+        <div class="scenario-group scenario-group-reset">
+          <button type="button" class="btn btn-reset" id="btn-reset">Reset session</button>
+        </div>
+
       </div>
     </div>
   </div>
@@ -131,8 +152,7 @@
   <!-- ── Demo controls footer ───────────────────────── -->
   <div class="demo-controls">
     <div class="demo-controls-inner">
-      <span class="demo-controls-label">Demo controls</span>
-      <button type="button" class="btn btn-secondary" id="btn-reset">Reset session</button>
+      <span class="demo-controls-label">Advanced</span>
       <button type="button" class="btn btn-secondary" id="btn-simulate">Run simulated journeys</button>
       <button type="button" class="btn btn-secondary" id="btn-metrics">Refresh metrics</button>
     </div>

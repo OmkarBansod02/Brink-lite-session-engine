@@ -57,13 +57,13 @@ const EVENT_LABELS = {
 };
 
 const PRIMARY_STEPS = [
-  { label: "Start session",    eventType: "product_view",       step: 1 },
+  { label: "Start session",      eventType: "product_view",       step: 1 },
   { label: "View return policy", eventType: "return_policy_view", step: 2 },
-  { label: "Add to cart",      eventType: "add_to_cart",         step: 3 },
+  { label: "Add to cart",        eventType: "add_to_cart",        step: 3 },
   { label: "Simulate cart idle", eventType: "cart_idle",          step: 4 },
   { label: "Apply recommendation", eventType: null,              step: 5, isApply: true },
-  { label: "Try coupon",       eventType: "coupon_attempt",      step: 6 },
-  { label: "Purchase",         eventType: "purchase",            step: 7 },
+  { label: "Try coupon",         eventType: "coupon_attempt",     step: 6 },
+  { label: "Purchase",           eventType: "purchase",           step: 7 },
 ];
 
 const SECONDARY_ACTIONS = [
@@ -76,6 +76,7 @@ let timeline = [];
 let latestDecision = null;
 let completedSteps = new Set();
 let interventionApplied = false;
+let sessionTerminal = false;
 
 /* ── Helpers ─────────────────────────────────────────── */
 
@@ -93,12 +94,13 @@ function formatGuardrail(g) {
   return `${tag} — ${g.reason}`;
 }
 
-function suggestedCopy(decision) {
-  return SUGGESTED_COPY[decision.recommended_action] || "";
+function shouldAct(decision) {
+  return decision && decision.recommended_action !== "no_action";
 }
 
-function shouldAct(decision) {
-  return decision.recommended_action !== "no_action";
+function getSuggestedCopy(decision) {
+  if (!decision) return "";
+  return SUGGESTED_COPY[decision.recommended_action] || "";
 }
 
 function getSessionId() {
@@ -140,12 +142,22 @@ function showError(msg) {
   document.getElementById("action-error").textContent = msg || "";
 }
 
-/* ── Disable / enable all scenario buttons ───────────── */
+/* ── Disable / enable buttons ────────────────────────── */
 
 function setButtonsDisabled(disabled) {
-  document.querySelectorAll(".btn-step, .btn-secondary, .btn-apply").forEach((b) => {
+  document.querySelectorAll("#primary-buttons .btn, #secondary-buttons .btn").forEach((b) => {
     b.disabled = disabled;
   });
+}
+
+function applyTerminalState() {
+  document.querySelectorAll("#primary-buttons .btn, #secondary-buttons .btn").forEach((b) => {
+    if (b.id !== "btn-apply") {
+      b.disabled = true;
+    }
+  });
+  const applyBtn = document.getElementById("btn-apply");
+  if (applyBtn) applyBtn.disabled = true;
 }
 
 /* ── Render: timeline ────────────────────────────────── */
@@ -153,18 +165,23 @@ function setButtonsDisabled(disabled) {
 function renderTimeline() {
   const list = document.getElementById("event-timeline");
   const empty = document.getElementById("timeline-empty");
+  const scrollContainer = document.getElementById("timeline-scroll");
 
   if (timeline.length === 0) {
     list.innerHTML = "";
     empty.style.display = "";
+    scrollContainer.style.display = "none";
     return;
   }
   empty.style.display = "none";
+  scrollContainer.style.display = "block";
 
   list.innerHTML = timeline
     .map((entry, i) => {
       const cls = entry.isIntervention
         ? "step-intervention"
+        : entry.isTerminal
+        ? "step-terminal"
         : i === timeline.length - 1
         ? "step-active"
         : "";
@@ -174,6 +191,8 @@ function renderTimeline() {
       </li>`;
     })
     .join("");
+
+  scrollContainer.scrollTop = scrollContainer.scrollHeight;
 }
 
 /* ── Render: intent badge ────────────────────────────── */
@@ -201,7 +220,10 @@ function renderDecision(decision) {
   statusEl.className = `decision-status-badge ${act ? "act" : "no-act"}`;
   statusLabel.textContent = act ? "Should act" : "No action";
 
-  document.getElementById("decision-action").textContent = formatAction(decision.recommended_action);
+  const actionEl = document.getElementById("decision-action");
+  actionEl.textContent = formatAction(decision.recommended_action);
+  actionEl.className = `decision-action-headline ${act ? "action-highlight" : ""}`;
+
   document.getElementById("decision-reason").textContent = decision.reason;
 
   document.getElementById("metric-intent-score").textContent = decision.intent_score;
@@ -214,7 +236,7 @@ function renderDecision(decision) {
   renderIntentBadge(decision.intent_level);
 
   const copySection = document.getElementById("decision-copy");
-  const copy = suggestedCopy(decision);
+  const copy = getSuggestedCopy(decision);
   if (act && copy) {
     document.getElementById("decision-copy-text").textContent = `"${copy}"`;
     copySection.classList.add("visible");
@@ -231,6 +253,7 @@ function resetDecisionCard() {
   statusEl.className = "decision-status-badge idle";
   document.getElementById("decision-status-label").textContent = "Waiting for events";
   document.getElementById("decision-action").textContent = "—";
+  document.getElementById("decision-action").className = "decision-action-headline";
   document.getElementById("decision-reason").textContent =
     "Send a shopper event to see the backend decision.";
   ["metric-intent-score", "metric-intent-level", "metric-hesitation", "metric-confidence", "metric-guardrail"].forEach(
@@ -257,16 +280,22 @@ function hideInterventionBanner() {
 function updateApplyButton() {
   const btn = document.getElementById("btn-apply");
   if (!btn) return;
+
   const canApply =
     latestDecision &&
     shouldAct(latestDecision) &&
-    !interventionApplied;
+    getSuggestedCopy(latestDecision) &&
+    !interventionApplied &&
+    !sessionTerminal;
+
   btn.disabled = !canApply;
 }
 
 /* ── Core: send event ────────────────────────────────── */
 
 async function sendEvent(eventType) {
+  if (sessionTerminal) return;
+
   showError("");
   setButtonsDisabled(true);
 
@@ -279,18 +308,26 @@ async function sendEvent(eventType) {
       margin_pct: PRODUCT.marginPct,
     });
 
+    const isTerminalEvent = eventType === "purchase" || eventType === "exit";
+
     timeline.push({
       eventType,
       label: EVENT_LABELS[eventType] || eventType,
       time: new Date().toLocaleTimeString([], { hour: "2-digit", minute: "2-digit", second: "2-digit" }),
-      isIntervention: eventType === "intervention_shown",
+      isIntervention: eventType === "intervention_shown" || eventType === "offer_shown",
+      isTerminal: isTerminalEvent,
     });
     renderTimeline();
     renderDecision(decision);
+
+    if (isTerminalEvent) {
+      sessionTerminal = true;
+      applyTerminalState();
+    }
   } catch (err) {
     showError(err.message);
   } finally {
-    setButtonsDisabled(false);
+    if (!sessionTerminal) setButtonsDisabled(false);
   }
 }
 
@@ -298,14 +335,17 @@ async function sendEvent(eventType) {
 
 async function handleApplyRecommendation() {
   if (!latestDecision || !shouldAct(latestDecision)) return;
+  if (sessionTerminal) return;
+
+  const savedCopy = getSuggestedCopy(latestDecision);
+  const savedAction = latestDecision.recommended_action;
+
+  if (!savedCopy) return;
 
   showError("");
   setButtonsDisabled(true);
 
   try {
-    const copy = suggestedCopy(latestDecision);
-    const action = latestDecision.recommended_action;
-
     const decision = await apiPost("/events", {
       session_id: getSessionId(),
       event_type: "intervention_shown",
@@ -321,8 +361,11 @@ async function handleApplyRecommendation() {
       isIntervention: true,
     });
 
-    if (action === "offer_small_discount") {
-      await apiPost("/events", {
+    showInterventionBanner(savedCopy);
+    interventionApplied = true;
+
+    if (savedAction === "offer_small_discount") {
+      const offerDecision = await apiPost("/events", {
         session_id: getSessionId(),
         event_type: "offer_shown",
         product_id: PRODUCT.id,
@@ -336,14 +379,14 @@ async function handleApplyRecommendation() {
         time: new Date().toLocaleTimeString([], { hour: "2-digit", minute: "2-digit", second: "2-digit" }),
         isIntervention: true,
       });
+
+      renderTimeline();
+      renderDecision(offerDecision);
+    } else {
+      renderTimeline();
+      renderDecision(decision);
     }
 
-    interventionApplied = true;
-
-    if (copy) showInterventionBanner(copy);
-
-    renderTimeline();
-    renderDecision(decision);
     markStepDone(5);
   } catch (err) {
     showError(err.message);
@@ -390,9 +433,11 @@ function buildButtons() {
   SECONDARY_ACTIONS.forEach(({ label, eventType }) => {
     const btn = document.createElement("button");
     btn.type = "button";
-    btn.className = "btn btn-secondary";
+    btn.className = "btn btn-secondary-action";
     btn.textContent = label;
-    btn.addEventListener("click", () => sendEvent(eventType));
+    btn.addEventListener("click", async () => {
+      await sendEvent(eventType);
+    });
     secondaryContainer.appendChild(btn);
   });
 }
@@ -406,6 +451,7 @@ async function handleReset() {
     timeline = [];
     completedSteps.clear();
     interventionApplied = false;
+    sessionTerminal = false;
     latestDecision = null;
     newSessionId();
     renderTimeline();
@@ -414,7 +460,13 @@ async function handleReset() {
     document.getElementById("simulation-panel").classList.remove("visible");
     document.getElementById("metrics-panel").classList.remove("visible");
 
-    document.querySelectorAll(".btn-step").forEach((b) => b.classList.remove("done"));
+    document.querySelectorAll(".btn-step").forEach((b) => {
+      b.classList.remove("done");
+      b.disabled = false;
+    });
+    document.querySelectorAll(".btn-secondary-action").forEach((b) => {
+      b.disabled = false;
+    });
     updateApplyButton();
   } catch (err) {
     showError(err.message);
@@ -434,7 +486,7 @@ async function handleSimulate() {
         .map((item) => {
           const d = item.final_decision;
           const act = shouldAct(d);
-          const copy = suggestedCopy(d);
+          const copy = getSuggestedCopy(d);
           const events = (item.event_timeline || [])
             .map((e) => EVENT_LABELS[e.event_type] || e.event_type)
             .join(" → ");
