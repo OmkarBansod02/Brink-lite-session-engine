@@ -1,5 +1,6 @@
 """Deterministic, explainable shopper decision engine."""
 
+from app.copy_agent import get_suggested_copy
 from app.models import (
     DecisionResponse,
     EventType,
@@ -149,7 +150,9 @@ class DecisionEngine:
             intent_score=score,
             intent_level=level,
             hesitation_types=hesitations,
+            should_act=action != RecommendedAction.NO_ACTION,
             recommended_action=action,
+            suggested_copy=get_suggested_copy(action),
             guardrail=guardrail,
             confidence=confidence,
             reason=reason,

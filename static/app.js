@@ -6,22 +6,6 @@ const PRODUCT = {
   marginPct: 58,
 };
 
-const SUGGESTED_COPY = {
-  show_return_reassurance:
-    "Free 30-day returns. Try it at home and return easily if it does not feel right.",
-  show_size_help:
-    "Not sure about fit? Most shoppers choose their usual size, and exchanges are easy.",
-  show_shipping_reassurance:
-    "Fast shipping with clear delivery updates before checkout.",
-  show_social_proof:
-    "Popular choice this week. Shoppers who viewed this item often complete checkout.",
-  show_value_proof:
-    "Premium materials, easy returns, and support included — no discount needed yet.",
-  offer_small_discount:
-    "Still deciding? Here is 5% off to help you complete your order.",
-  no_action: "",
-};
-
 const ACTION_LABELS = {
   show_return_reassurance: "Show return reassurance",
   show_size_help: "Show size help",
@@ -77,6 +61,7 @@ let latestDecision = null;
 let completedSteps = new Set();
 let interventionApplied = false;
 let sessionTerminal = false;
+let actionPending = false;
 
 /* ── Helpers ─────────────────────────────────────────── */
 
@@ -95,12 +80,21 @@ function formatGuardrail(g) {
 }
 
 function shouldAct(decision) {
-  return decision && decision.recommended_action !== "no_action";
+  return decision?.should_act === true;
 }
 
 function getSuggestedCopy(decision) {
-  if (!decision) return "";
-  return SUGGESTED_COPY[decision.recommended_action] || "";
+  return typeof decision?.suggested_copy === "string"
+    ? decision.suggested_copy.trim()
+    : "";
+}
+
+function canApplyRecommendation(decision) {
+  return (
+    decision?.should_act === true &&
+    decision.recommended_action !== "no_action" &&
+    getSuggestedCopy(decision) !== ""
+  );
 }
 
 function getSessionId() {
@@ -142,22 +136,31 @@ function showError(msg) {
   document.getElementById("action-error").textContent = msg || "";
 }
 
-/* ── Disable / enable buttons ────────────────────────── */
+/* ── Guided button state ─────────────────────────────── */
 
-function setButtonsDisabled(disabled) {
-  document.querySelectorAll("#primary-buttons .btn, #secondary-buttons .btn").forEach((b) => {
-    b.disabled = disabled;
-  });
-}
+function renderButtonStates() {
+  const sessionStarted = completedSteps.has(1);
 
-function applyTerminalState() {
-  document.querySelectorAll("#primary-buttons .btn, #secondary-buttons .btn").forEach((b) => {
-    if (b.id !== "btn-apply") {
-      b.disabled = true;
+  document.querySelectorAll("#primary-buttons [data-step]").forEach((btn) => {
+    const step = Number(btn.dataset.step);
+
+    if (step === 1) {
+      btn.disabled = actionPending || sessionTerminal || sessionStarted;
+    } else if (step === 5) {
+      btn.disabled =
+        actionPending ||
+        sessionTerminal ||
+        !sessionStarted ||
+        interventionApplied ||
+        !canApplyRecommendation(latestDecision);
+    } else {
+      btn.disabled = actionPending || sessionTerminal || !sessionStarted;
     }
   });
-  const applyBtn = document.getElementById("btn-apply");
-  if (applyBtn) applyBtn.disabled = true;
+
+  document.querySelectorAll(".btn-secondary-action").forEach((btn) => {
+    btn.disabled = actionPending || sessionTerminal || !sessionStarted;
+  });
 }
 
 /* ── Render: timeline ────────────────────────────────── */
@@ -249,7 +252,7 @@ function renderDecision(decision) {
     copySection.classList.remove("visible");
   }
 
-  updateApplyButton();
+  renderButtonStates();
 }
 
 function resetDecisionCard() {
@@ -280,34 +283,14 @@ function hideInterventionBanner() {
   document.getElementById("intervention-banner").classList.remove("visible");
 }
 
-/* ── Apply recommendation button state ───────────────── */
-
-function updateApplyButton() {
-  const btn = document.getElementById("btn-apply");
-  if (!btn) return;
-
-  if (interventionApplied) {
-    btn.disabled = true;
-    btn.classList.add("done");
-    return;
-  }
-
-  const canApply =
-    latestDecision &&
-    shouldAct(latestDecision) &&
-    getSuggestedCopy(latestDecision) &&
-    !sessionTerminal;
-
-  btn.disabled = !canApply;
-}
-
 /* ── Core: send event ────────────────────────────────── */
 
 async function sendEvent(eventType) {
-  if (sessionTerminal) return;
+  if (sessionTerminal || actionPending) return null;
 
   showError("");
-  setButtonsDisabled(true);
+  actionPending = true;
+  renderButtonStates();
 
   try {
     const decision = await apiPost("/events", {
@@ -334,21 +317,21 @@ async function sendEvent(eventType) {
     renderTimeline();
     renderDecision(decision);
 
-    if (isTerminalEvent) {
-      applyTerminalState();
-    }
+    return decision;
   } catch (err) {
     showError(err.message);
+    return null;
   } finally {
-    if (!sessionTerminal) setButtonsDisabled(false);
+    actionPending = false;
+    renderButtonStates();
   }
 }
 
 /* ── Apply recommendation handler ────────────────────── */
 
 async function handleApplyRecommendation() {
-  if (!latestDecision || !shouldAct(latestDecision)) return;
-  if (sessionTerminal) return;
+  if (!canApplyRecommendation(latestDecision)) return;
+  if (sessionTerminal || actionPending || interventionApplied || !completedSteps.has(1)) return;
 
   const savedCopy = getSuggestedCopy(latestDecision);
   const savedAction = latestDecision.recommended_action;
@@ -356,7 +339,8 @@ async function handleApplyRecommendation() {
   if (!savedCopy) return;
 
   showError("");
-  setButtonsDisabled(true);
+  actionPending = true;
+  renderButtonStates();
 
   try {
     const decision = await apiPost("/events", {
@@ -404,7 +388,8 @@ async function handleApplyRecommendation() {
   } catch (err) {
     showError(err.message);
   } finally {
-    setButtonsDisabled(false);
+    actionPending = false;
+    renderButtonStates();
   }
 }
 
@@ -414,6 +399,7 @@ function markStepDone(stepNum) {
   completedSteps.add(stepNum);
   const btn = document.querySelector(`[data-step="${stepNum}"]`);
   if (btn) btn.classList.add("done");
+  renderButtonStates();
 }
 
 function buildButtons() {
@@ -433,10 +419,11 @@ function buildButtons() {
       btn.addEventListener("click", handleApplyRecommendation);
     } else {
       btn.className = "btn btn-step";
+      btn.disabled = true;
       btn.innerHTML = `<span class="scenario-step-number">${step.step}</span>${step.label}`;
       btn.addEventListener("click", async () => {
-        await sendEvent(step.eventType);
-        markStepDone(step.step);
+        const decision = await sendEvent(step.eventType);
+        if (decision) markStepDone(step.step);
       });
     }
 
@@ -447,6 +434,7 @@ function buildButtons() {
     const btn = document.createElement("button");
     btn.type = "button";
     btn.className = "btn btn-secondary-action";
+    btn.disabled = true;
     btn.textContent = label;
     btn.addEventListener("click", async () => {
       await sendEvent(eventType);
@@ -459,8 +447,13 @@ function buildButtons() {
 
 async function handleReset() {
   showError("");
+  actionPending = true;
+  renderButtonStates();
   try {
     await apiPost("/reset");
+  } catch (err) {
+    showError(err.message);
+  } finally {
     timeline = [];
     completedSteps.clear();
     interventionApplied = false;
@@ -470,21 +463,14 @@ async function handleReset() {
     renderTimeline();
     resetDecisionCard();
     hideInterventionBanner();
+    document.getElementById("intervention-banner-text").textContent = "";
     document.getElementById("simulation-panel").classList.remove("visible");
     document.getElementById("metrics-panel").classList.remove("visible");
-
-    document.querySelectorAll(".btn-step").forEach((b) => {
+    document.querySelectorAll("#primary-buttons [data-step]").forEach((b) => {
       b.classList.remove("done");
-      b.disabled = false;
     });
-    document.querySelectorAll(".btn-secondary-action").forEach((b) => {
-      b.disabled = false;
-    });
-    const applyBtn = document.getElementById("btn-apply");
-    if (applyBtn) applyBtn.classList.remove("done");
-    updateApplyButton();
-  } catch (err) {
-    showError(err.message);
+    actionPending = false;
+    renderButtonStates();
   }
 }
 
@@ -568,6 +554,7 @@ function init() {
   document.getElementById("btn-reset").addEventListener("click", handleReset);
   document.getElementById("btn-simulate").addEventListener("click", handleSimulate);
   document.getElementById("btn-metrics").addEventListener("click", handleMetrics);
+  renderButtonStates();
 }
 
 init();

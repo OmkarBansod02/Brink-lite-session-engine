@@ -30,7 +30,9 @@ def decide_for(*event_types: EventType, margin_pct: float = 58):
 
 def test_return_policy_and_cart_recommends_return_reassurance() -> None:
     decision, _ = decide_for(EventType.RETURN_POLICY_VIEW, EventType.ADD_TO_CART)
+    assert decision.should_act is True
     assert decision.recommended_action == RecommendedAction.SHOW_RETURN_REASSURANCE
+    assert decision.suggested_copy
 
 
 def test_size_guide_and_cart_recommends_size_help() -> None:
@@ -48,7 +50,9 @@ def test_low_margin_coupon_blocks_discount_and_shows_value() -> None:
 
 def test_low_intent_browsing_returns_no_action() -> None:
     decision, _ = decide_for(EventType.PRODUCT_VIEW)
+    assert decision.should_act is False
     assert decision.recommended_action == RecommendedAction.NO_ACTION
+    assert decision.suggested_copy == ""
 
 
 def test_recommendation_can_repeat_before_intervention_is_shown() -> None:

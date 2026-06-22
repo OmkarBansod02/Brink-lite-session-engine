@@ -77,7 +77,9 @@ class DecisionResponse(BaseModel):
     intent_score: int
     intent_level: IntentLevel
     hesitation_types: list[HesitationType] = Field(default_factory=list)
+    should_act: bool
     recommended_action: RecommendedAction
+    suggested_copy: str
     guardrail: GuardrailResult
     confidence: float = Field(ge=0.0, le=1.0)
     reason: str
