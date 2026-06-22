@@ -3,89 +3,140 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>Brink Lite — Premium Linen Shirt</title>
+  <title>Brink Lite Session Engine</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;550;600;700&display=swap" rel="stylesheet">
   <link rel="stylesheet" href="/style.css">
 </head>
 <body>
+
+  <!-- ── Header ─────────────────────────────────────── -->
   <header class="site-header">
     <div class="header-inner">
-      <div>
-        <p class="eyebrow">Brink Lite Session Engine · Phase 3 Demo</p>
-        <h1>Live storefront event capture</h1>
-      </div>
-      <div class="session-badge">
-        <span class="label">Session</span>
-        <code id="session-id-display">—</code>
-      </div>
+      <h1 class="header-title">Brink Lite Session Engine</h1>
+      <p class="header-subtitle">Real-time shopper decisioning from live storefront events.</p>
+      <p class="header-helper">Every click sends a real event to the Python backend via <code>POST /events</code></p>
     </div>
-    <p class="header-note">
-      Every button click sends a real event to <code>POST /events</code> on the Python backend.
-      The decision card updates from the live API response.
-    </p>
   </header>
 
-  <main class="layout">
+  <!-- ── 3-card main grid ───────────────────────────── -->
+  <main class="main-grid">
+
+    <!-- Left: Product Page -->
     <section class="card product-card">
-      <p class="product-label">Product page</p>
-      <h2>Premium Linen Shirt</h2>
-      <p class="price">₹2,499</p>
-      <p class="description">
-        Breathable European linen with a relaxed tailored fit. Lightweight for warm days,
-        structured enough for evenings out.
+      <p class="card-label">Product Page</p>
+      <h2 class="product-name">Premium Linen Shirt</h2>
+      <p class="product-price">₹2,499</p>
+      <p class="product-desc">
+        Breathable European linen with a relaxed tailored fit.
+        Lightweight for warm days, structured enough for evenings out.
       </p>
       <ul class="trust-badges">
         <li>Free returns</li>
         <li>Fast shipping</li>
         <li>Size help available</li>
       </ul>
-      <p class="meta">Product ID: <code>premium-linen-shirt</code> · Margin: 58%</p>
-    </section>
+      <p class="product-meta">Product ID: premium-linen-shirt · Margin: 58%</p>
 
-    <section class="card decision-card" id="decision-card">
-      <p class="product-label">Brink Lite decision</p>
-      <div id="decision-status" class="decision-status idle">
-        <span id="decision-status-label">Waiting for first event</span>
+      <div id="intervention-banner" class="intervention-banner">
+        <p class="intervention-banner-label">Shopper-facing intervention</p>
+        <p id="intervention-banner-text" class="intervention-banner-text"></p>
       </div>
-      <p id="decision-action" class="decision-action">—</p>
-      <p id="decision-reason" class="decision-reason">Click a shopper action to see the backend decision.</p>
-      <div id="copy-banner" class="copy-banner hidden">
-        <p class="copy-banner-label">Suggested copy preview</p>
-        <p id="copy-banner-text"></p>
-      </div>
-      <dl class="decision-metrics" id="decision-metrics">
-        <div><dt>Intent score</dt><dd id="metric-intent-score">—</dd></div>
-        <div><dt>Intent level</dt><dd id="metric-intent-level">—</dd></div>
-        <div><dt>Hesitation</dt><dd id="metric-hesitation">—</dd></div>
-        <div><dt>Confidence</dt><dd id="metric-confidence">—</dd></div>
-        <div><dt>Guardrail</dt><dd id="metric-guardrail">—</dd></div>
-      </dl>
     </section>
 
-    <section class="card actions-card">
-      <p class="product-label">Shopper actions</p>
-      <p class="section-hint">Each click → real backend event</p>
-      <div class="action-grid" id="action-buttons"></div>
-      <p id="action-error" class="error hidden"></p>
-    </section>
-
+    <!-- Middle: Live Session Timeline -->
     <section class="card timeline-card">
-      <p class="product-label">Event timeline</p>
-      <ol id="event-timeline" class="timeline">
-        <li class="timeline-empty">No events yet.</li>
-      </ol>
+      <p class="card-label">Live Session Timeline</p>
+      <div class="intent-badge-row">
+        <span id="intent-badge" class="intent-badge none">Intent: —</span>
+        <span class="session-label" id="session-label">Local demo session</span>
+      </div>
+      <ul id="event-timeline" class="timeline"></ul>
+      <p id="timeline-empty" class="timeline-empty">No events yet. Click "Start session" below.</p>
     </section>
 
-    <section class="card demo-card">
-      <p class="product-label">Demo controls</p>
-      <div class="demo-buttons">
-        <button type="button" class="btn btn-secondary" id="btn-reset">Reset session</button>
-        <button type="button" class="btn btn-secondary" id="btn-simulate">Run simulated journeys</button>
-        <button type="button" class="btn btn-secondary" id="btn-metrics">Refresh metrics</button>
+    <!-- Right: Decision Engine (hero) -->
+    <section class="card decision-card">
+      <p class="card-label">Decision Engine</p>
+
+      <div id="decision-status" class="decision-status-badge idle">
+        <span class="decision-status-dot"></span>
+        <span id="decision-status-label">Waiting for events</span>
       </div>
-      <div id="simulation-results" class="simulation-results hidden"></div>
-      <div id="metrics-panel" class="metrics-panel hidden"></div>
+
+      <h3 id="decision-action" class="decision-action-headline">—</h3>
+      <p id="decision-reason" class="decision-reason">
+        Send a shopper event to see the backend decision.
+      </p>
+
+      <div class="decision-metrics-grid">
+        <div class="decision-metric">
+          <span class="decision-metric-label">Intent score</span>
+          <span class="decision-metric-value" id="metric-intent-score">—</span>
+        </div>
+        <div class="decision-metric">
+          <span class="decision-metric-label">Intent level</span>
+          <span class="decision-metric-value" id="metric-intent-level">—</span>
+        </div>
+        <div class="decision-metric">
+          <span class="decision-metric-label">Hesitation</span>
+          <span class="decision-metric-value" id="metric-hesitation">—</span>
+        </div>
+        <div class="decision-metric">
+          <span class="decision-metric-label">Confidence</span>
+          <span class="decision-metric-value" id="metric-confidence">—</span>
+        </div>
+        <div class="decision-metric full-width">
+          <span class="decision-metric-label">Guardrail</span>
+          <span class="decision-metric-value" id="metric-guardrail">—</span>
+        </div>
+      </div>
+
+      <div id="decision-copy" class="decision-copy-section">
+        <p class="decision-copy-label">Suggested shopper-facing copy</p>
+        <p id="decision-copy-text" class="decision-copy-text"></p>
+      </div>
     </section>
   </main>
+
+  <!-- ── Guided scenario buttons ────────────────────── -->
+  <div class="scenario-section">
+    <div class="scenario-card">
+      <div class="scenario-groups">
+
+        <div class="scenario-group">
+          <p class="scenario-group-label">Demo path</p>
+          <div class="scenario-buttons" id="primary-buttons"></div>
+        </div>
+
+        <div class="scenario-group">
+          <p class="scenario-group-label">Other actions</p>
+          <div class="scenario-buttons" id="secondary-buttons"></div>
+        </div>
+
+      </div>
+    </div>
+  </div>
+
+  <!-- ── Error display ──────────────────────────────── -->
+  <p id="action-error" class="action-error"></p>
+
+  <!-- ── Expandable panels ──────────────────────────── -->
+  <div class="expand-panel">
+    <div id="simulation-panel" class="panel-content"></div>
+    <div id="metrics-panel" class="panel-content"></div>
+  </div>
+
+  <!-- ── Demo controls footer ───────────────────────── -->
+  <div class="demo-controls">
+    <div class="demo-controls-inner">
+      <span class="demo-controls-label">Demo controls</span>
+      <button type="button" class="btn btn-secondary" id="btn-reset">Reset session</button>
+      <button type="button" class="btn btn-secondary" id="btn-simulate">Run simulated journeys</button>
+      <button type="button" class="btn btn-secondary" id="btn-metrics">Refresh metrics</button>
+    </div>
+  </div>
 
   <script src="/app.js"></script>
 </body>

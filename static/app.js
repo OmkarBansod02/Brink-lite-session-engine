@@ -1,21 +1,10 @@
+/* Brink Lite Session Engine — frontend controller */
+
 const PRODUCT = {
   id: "premium-linen-shirt",
   cartValue: 2499,
   marginPct: 58,
 };
-
-const ACTIONS = [
-  { label: "View Product", eventType: "product_view" },
-  { label: "View Size Guide", eventType: "size_guide_open" },
-  { label: "View Return Policy", eventType: "return_policy_view" },
-  { label: "Check Shipping", eventType: "shipping_info_view" },
-  { label: "Add to Cart", eventType: "add_to_cart" },
-  { label: "Try Coupon", eventType: "coupon_attempt" },
-  { label: "Checkout", eventType: "checkout_start" },
-  { label: "Simulate Cart Idle", eventType: "cart_idle" },
-  { label: "Purchase", eventType: "purchase" },
-  { label: "Exit", eventType: "exit" },
-];
 
 const SUGGESTED_COPY = {
   show_return_reassurance:
@@ -33,13 +22,83 @@ const SUGGESTED_COPY = {
   no_action: "",
 };
 
-const timeline = [];
+const ACTION_LABELS = {
+  show_return_reassurance: "Show return reassurance",
+  show_size_help: "Show size help",
+  show_shipping_reassurance: "Show shipping reassurance",
+  show_social_proof: "Show social proof",
+  show_value_proof: "Show value proof",
+  offer_small_discount: "Offer small discount",
+  no_action: "No action",
+};
 
-function humanize(value) {
-  return value
-    .split("_")
-    .map((word) => word.charAt(0).toUpperCase() + word.slice(1))
-    .join(" ");
+const HESITATION_LABELS = {
+  returns_uncertainty: "Returns uncertainty",
+  fit_uncertainty: "Fit uncertainty",
+  shipping_uncertainty: "Shipping uncertainty",
+  price_sensitivity: "Price sensitivity",
+  checkout_hesitation: "Checkout hesitation",
+};
+
+const EVENT_LABELS = {
+  product_view: "Product viewed",
+  repeat_product_view: "Product viewed again",
+  size_guide_open: "Size guide opened",
+  return_policy_view: "Return policy viewed",
+  shipping_info_view: "Shipping info viewed",
+  add_to_cart: "Added to cart",
+  cart_idle: "Cart idle",
+  checkout_start: "Checkout started",
+  coupon_attempt: "Coupon attempted",
+  intervention_shown: "Intervention shown",
+  offer_shown: "Offer shown",
+  purchase: "Purchase completed",
+  exit: "Session exited",
+};
+
+const PRIMARY_STEPS = [
+  { label: "Start session",    eventType: "product_view",       step: 1 },
+  { label: "View return policy", eventType: "return_policy_view", step: 2 },
+  { label: "Add to cart",      eventType: "add_to_cart",         step: 3 },
+  { label: "Simulate cart idle", eventType: "cart_idle",          step: 4 },
+  { label: "Apply recommendation", eventType: null,              step: 5, isApply: true },
+  { label: "Try coupon",       eventType: "coupon_attempt",      step: 6 },
+  { label: "Purchase",         eventType: "purchase",            step: 7 },
+];
+
+const SECONDARY_ACTIONS = [
+  { label: "View size guide",  eventType: "size_guide_open" },
+  { label: "Check shipping",   eventType: "shipping_info_view" },
+  { label: "Exit",             eventType: "exit" },
+];
+
+let timeline = [];
+let latestDecision = null;
+let completedSteps = new Set();
+let interventionApplied = false;
+
+/* ── Helpers ─────────────────────────────────────────── */
+
+function formatAction(raw) {
+  return ACTION_LABELS[raw] || raw.replace(/_/g, " ").replace(/\b\w/g, (c) => c.toUpperCase());
+}
+
+function formatHesitations(types) {
+  if (!types || types.length === 0) return "None detected";
+  return types.map((t) => HESITATION_LABELS[t] || t).join(", ");
+}
+
+function formatGuardrail(g) {
+  const tag = g.discount_allowed ? "Allowed" : "Blocked";
+  return `${tag} — ${g.reason}`;
+}
+
+function suggestedCopy(decision) {
+  return SUGGESTED_COPY[decision.recommended_action] || "";
+}
+
+function shouldAct(decision) {
+  return decision.recommended_action !== "no_action";
 }
 
 function getSessionId() {
@@ -57,138 +116,159 @@ function newSessionId() {
   return id;
 }
 
-function shouldAct(decision) {
-  return decision.recommended_action !== "no_action";
-}
-
-function suggestedCopy(decision) {
-  return SUGGESTED_COPY[decision.recommended_action] || "";
-}
-
-function formatHesitation(types) {
-  if (!types || types.length === 0) {
-    return "None detected";
-  }
-  return types.map(humanize).join(", ");
-}
-
-function formatGuardrail(guardrail) {
-  const status = guardrail.discount_allowed ? "Discount allowed" : "Discount blocked";
-  return `${status} — ${guardrail.reason}`;
-}
+/* ── API ─────────────────────────────────────────────── */
 
 async function apiPost(path, body) {
-  const response = await fetch(path, {
+  const resp = await fetch(path, {
     method: "POST",
     headers: { "Content-Type": "application/json" },
     body: body ? JSON.stringify(body) : undefined,
   });
-  if (!response.ok) {
-    const detail = await response.text();
-    throw new Error(`${path} failed (${response.status}): ${detail}`);
-  }
-  return response.json();
+  if (!resp.ok) throw new Error(`${path} → ${resp.status}: ${await resp.text()}`);
+  return resp.json();
 }
 
 async function apiGet(path) {
-  const response = await fetch(path);
-  if (!response.ok) {
-    const detail = await response.text();
-    throw new Error(`${path} failed (${response.status}): ${detail}`);
-  }
-  return response.json();
+  const resp = await fetch(path);
+  if (!resp.ok) throw new Error(`${path} → ${resp.status}: ${await resp.text()}`);
+  return resp.json();
 }
 
-function setActionError(message) {
-  const el = document.getElementById("action-error");
-  if (!message) {
-    el.textContent = "";
-    el.classList.add("hidden");
-    return;
-  }
-  el.textContent = message;
-  el.classList.remove("hidden");
+/* ── Error display ───────────────────────────────────── */
+
+function showError(msg) {
+  document.getElementById("action-error").textContent = msg || "";
 }
 
-function renderDecision(decision) {
-  const act = shouldAct(decision);
-  const statusEl = document.getElementById("decision-status");
-  const statusLabel = document.getElementById("decision-status-label");
+/* ── Disable / enable all scenario buttons ───────────── */
 
-  statusEl.className = `decision-status ${act ? "act" : "no-act"}`;
-  statusLabel.textContent = act ? "Should act" : "No action";
-
-  document.getElementById("decision-action").textContent = humanize(
-    decision.recommended_action
-  );
-  document.getElementById("decision-reason").textContent = decision.reason;
-
-  const copy = suggestedCopy(decision);
-  const banner = document.getElementById("copy-banner");
-  const bannerText = document.getElementById("copy-banner-text");
-  if (act && copy) {
-    bannerText.textContent = copy;
-    banner.classList.remove("hidden");
-  } else {
-    banner.classList.add("hidden");
-  }
-
-  document.getElementById("metric-intent-score").textContent = decision.intent_score;
-  document.getElementById("metric-intent-level").textContent = humanize(
-    decision.intent_level
-  );
-  document.getElementById("metric-hesitation").textContent = formatHesitation(
-    decision.hesitation_types
-  );
-  document.getElementById("metric-confidence").textContent = `${Math.round(
-    decision.confidence * 100
-  )}%`;
-  document.getElementById("metric-guardrail").textContent = formatGuardrail(
-    decision.guardrail
-  );
+function setButtonsDisabled(disabled) {
+  document.querySelectorAll(".btn-step, .btn-secondary, .btn-apply").forEach((b) => {
+    b.disabled = disabled;
+  });
 }
+
+/* ── Render: timeline ────────────────────────────────── */
 
 function renderTimeline() {
   const list = document.getElementById("event-timeline");
+  const empty = document.getElementById("timeline-empty");
+
   if (timeline.length === 0) {
-    list.innerHTML = '<li class="timeline-empty">No events yet.</li>';
+    list.innerHTML = "";
+    empty.style.display = "";
     return;
   }
+  empty.style.display = "none";
 
   list.innerHTML = timeline
-    .map(
-      (entry) =>
-        `<li><time>${entry.time}</time><strong>${humanize(entry.eventType)}</strong></li>`
-    )
+    .map((entry, i) => {
+      const cls = entry.isIntervention
+        ? "step-intervention"
+        : i === timeline.length - 1
+        ? "step-active"
+        : "";
+      return `<li class="${cls}">
+        <span class="step-label">${entry.label}</span>
+        <span class="step-time">${entry.time}</span>
+      </li>`;
+    })
     .join("");
 }
 
-function resetDecisionCard() {
+/* ── Render: intent badge ────────────────────────────── */
+
+function renderIntentBadge(level) {
+  const badge = document.getElementById("intent-badge");
+  if (!level) {
+    badge.className = "intent-badge none";
+    badge.textContent = "Intent: —";
+    return;
+  }
+  const display = level.charAt(0).toUpperCase() + level.slice(1);
+  badge.className = `intent-badge ${level}`;
+  badge.textContent = `Intent: ${display}`;
+}
+
+/* ── Render: decision card ───────────────────────────── */
+
+function renderDecision(decision) {
+  latestDecision = decision;
+  const act = shouldAct(decision);
+
   const statusEl = document.getElementById("decision-status");
-  statusEl.className = "decision-status idle";
-  document.getElementById("decision-status-label").textContent =
-    "Waiting for first event";
+  const statusLabel = document.getElementById("decision-status-label");
+  statusEl.className = `decision-status-badge ${act ? "act" : "no-act"}`;
+  statusLabel.textContent = act ? "Should act" : "No action";
+
+  document.getElementById("decision-action").textContent = formatAction(decision.recommended_action);
+  document.getElementById("decision-reason").textContent = decision.reason;
+
+  document.getElementById("metric-intent-score").textContent = decision.intent_score;
+  document.getElementById("metric-intent-level").textContent =
+    decision.intent_level.charAt(0).toUpperCase() + decision.intent_level.slice(1);
+  document.getElementById("metric-hesitation").textContent = formatHesitations(decision.hesitation_types);
+  document.getElementById("metric-confidence").textContent = `${Math.round(decision.confidence * 100)}%`;
+  document.getElementById("metric-guardrail").textContent = formatGuardrail(decision.guardrail);
+
+  renderIntentBadge(decision.intent_level);
+
+  const copySection = document.getElementById("decision-copy");
+  const copy = suggestedCopy(decision);
+  if (act && copy) {
+    document.getElementById("decision-copy-text").textContent = `"${copy}"`;
+    copySection.classList.add("visible");
+  } else {
+    copySection.classList.remove("visible");
+  }
+
+  updateApplyButton();
+}
+
+function resetDecisionCard() {
+  latestDecision = null;
+  const statusEl = document.getElementById("decision-status");
+  statusEl.className = "decision-status-badge idle";
+  document.getElementById("decision-status-label").textContent = "Waiting for events";
   document.getElementById("decision-action").textContent = "—";
   document.getElementById("decision-reason").textContent =
-    "Click a shopper action to see the backend decision.";
-  document.getElementById("copy-banner").classList.add("hidden");
+    "Send a shopper event to see the backend decision.";
   ["metric-intent-score", "metric-intent-level", "metric-hesitation", "metric-confidence", "metric-guardrail"].forEach(
-    (id) => {
-      document.getElementById(id).textContent = "—";
-    }
+    (id) => { document.getElementById(id).textContent = "—"; }
   );
+  document.getElementById("decision-copy").classList.remove("visible");
+  renderIntentBadge(null);
 }
 
-function updateSessionDisplay() {
-  document.getElementById("session-id-display").textContent = getSessionId();
+/* ── Render: intervention banner on product card ─────── */
+
+function showInterventionBanner(text) {
+  const banner = document.getElementById("intervention-banner");
+  document.getElementById("intervention-banner-text").textContent = text;
+  banner.classList.add("visible");
 }
 
-async function sendEvent(eventType, label) {
-  setActionError("");
-  const buttons = document.querySelectorAll(".btn-action");
-  buttons.forEach((btn) => {
-    btn.disabled = true;
-  });
+function hideInterventionBanner() {
+  document.getElementById("intervention-banner").classList.remove("visible");
+}
+
+/* ── Apply recommendation button state ───────────────── */
+
+function updateApplyButton() {
+  const btn = document.getElementById("btn-apply");
+  if (!btn) return;
+  const canApply =
+    latestDecision &&
+    shouldAct(latestDecision) &&
+    !interventionApplied;
+  btn.disabled = !canApply;
+}
+
+/* ── Core: send event ────────────────────────────────── */
+
+async function sendEvent(eventType) {
+  showError("");
+  setButtonsDisabled(true);
 
   try {
     const decision = await apiPost("/events", {
@@ -201,146 +281,223 @@ async function sendEvent(eventType, label) {
 
     timeline.push({
       eventType,
-      label,
-      time: new Date().toLocaleTimeString(),
+      label: EVENT_LABELS[eventType] || eventType,
+      time: new Date().toLocaleTimeString([], { hour: "2-digit", minute: "2-digit", second: "2-digit" }),
+      isIntervention: eventType === "intervention_shown",
     });
     renderTimeline();
     renderDecision(decision);
-  } catch (error) {
-    setActionError(error.message);
+  } catch (err) {
+    showError(err.message);
   } finally {
-    buttons.forEach((btn) => {
-      btn.disabled = false;
-    });
+    setButtonsDisabled(false);
   }
 }
 
-function renderSimulationResults(results) {
-  const panel = document.getElementById("simulation-results");
-  panel.classList.remove("hidden");
-  panel.innerHTML =
-    "<p class='product-label'>Simulation results</p>" +
-    results
-      .map((item) => {
-        const decision = item.final_decision;
-        const act = shouldAct(decision);
-        const copy = suggestedCopy(decision);
-        const events = (item.event_timeline || [])
-          .map((event) => humanize(event.event_type))
-          .join(" → ");
-        return `
-          <article class="simulation-item">
-            <h3>${humanize(item.simulation_name)}</h3>
-            <p>Session: <code>${item.session_id}</code></p>
-            <p>Events: ${events}</p>
-            <p class="sim-action">${act ? "Should act" : "No action"} — ${humanize(decision.recommended_action)}</p>
-            <p>${decision.reason}</p>
-            ${copy ? `<p><em>"${copy}"</em></p>` : ""}
-          </article>
-        `;
-      })
-      .join("");
+/* ── Apply recommendation handler ────────────────────── */
+
+async function handleApplyRecommendation() {
+  if (!latestDecision || !shouldAct(latestDecision)) return;
+
+  showError("");
+  setButtonsDisabled(true);
+
+  try {
+    const copy = suggestedCopy(latestDecision);
+    const action = latestDecision.recommended_action;
+
+    const decision = await apiPost("/events", {
+      session_id: getSessionId(),
+      event_type: "intervention_shown",
+      product_id: PRODUCT.id,
+      cart_value: PRODUCT.cartValue,
+      margin_pct: PRODUCT.marginPct,
+    });
+
+    timeline.push({
+      eventType: "intervention_shown",
+      label: "Intervention shown",
+      time: new Date().toLocaleTimeString([], { hour: "2-digit", minute: "2-digit", second: "2-digit" }),
+      isIntervention: true,
+    });
+
+    if (action === "offer_small_discount") {
+      await apiPost("/events", {
+        session_id: getSessionId(),
+        event_type: "offer_shown",
+        product_id: PRODUCT.id,
+        cart_value: PRODUCT.cartValue,
+        margin_pct: PRODUCT.marginPct,
+      });
+
+      timeline.push({
+        eventType: "offer_shown",
+        label: "Offer shown",
+        time: new Date().toLocaleTimeString([], { hour: "2-digit", minute: "2-digit", second: "2-digit" }),
+        isIntervention: true,
+      });
+    }
+
+    interventionApplied = true;
+
+    if (copy) showInterventionBanner(copy);
+
+    renderTimeline();
+    renderDecision(decision);
+    markStepDone(5);
+  } catch (err) {
+    showError(err.message);
+  } finally {
+    setButtonsDisabled(false);
+  }
 }
 
-function renderMetrics(metrics) {
-  const panel = document.getElementById("metrics-panel");
-  panel.classList.remove("hidden");
+/* ── Build scenario buttons ──────────────────────────── */
 
-  const boxes = [
-    { name: "Total sessions", value: metrics.total_sessions },
-    { name: "Total events", value: metrics.total_events },
-    { name: "Actions recommended", value: metrics.actions_recommended },
-    { name: "Discounts blocked", value: metrics.discounts_blocked },
-    { name: "Purchases", value: metrics.purchases },
-    { name: "Exits", value: metrics.exits },
-  ];
-
-  const actionCounts = Object.entries(metrics.action_type_counts || {})
-    .map(([key, count]) => `<li>${humanize(key)}: ${count}</li>`)
-    .join("");
-  const hesitationCounts = Object.entries(metrics.hesitation_reason_counts || {})
-    .map(([key, count]) => `<li>${humanize(key)}: ${count}</li>`)
-    .join("");
-
-  panel.innerHTML = `
-    <p class="product-label">Backend metrics</p>
-    <div class="metrics-grid">
-      ${boxes
-        .map(
-          (box) => `
-        <div class="metric-box">
-          <span class="value">${box.value}</span>
-          <span class="name">${box.name}</span>
-        </div>`
-        )
-        .join("")}
-    </div>
-    <div class="metrics-subsection">
-      <h4>Action types</h4>
-      <ul>${actionCounts || "<li>None</li>"}</ul>
-    </div>
-    <div class="metrics-subsection">
-      <h4>Hesitation reasons</h4>
-      <ul>${hesitationCounts || "<li>None</li>"}</ul>
-    </div>
-  `;
+function markStepDone(stepNum) {
+  completedSteps.add(stepNum);
+  const btn = document.querySelector(`[data-step="${stepNum}"]`);
+  if (btn) btn.classList.add("done");
 }
 
-function buildActionButtons() {
-  const container = document.getElementById("action-buttons");
-  ACTIONS.forEach(({ label, eventType }) => {
-    const button = document.createElement("button");
-    button.type = "button";
-    button.className = "btn btn-action";
-    button.textContent = label;
-    button.addEventListener("click", () => sendEvent(eventType, label));
-    container.appendChild(button);
+function buildButtons() {
+  const primaryContainer = document.getElementById("primary-buttons");
+  const secondaryContainer = document.getElementById("secondary-buttons");
+
+  PRIMARY_STEPS.forEach((step) => {
+    const btn = document.createElement("button");
+    btn.type = "button";
+    btn.setAttribute("data-step", step.step);
+
+    if (step.isApply) {
+      btn.className = "btn btn-apply";
+      btn.id = "btn-apply";
+      btn.disabled = true;
+      btn.innerHTML = `<span class="scenario-step-number">${step.step}</span>${step.label}`;
+      btn.addEventListener("click", handleApplyRecommendation);
+    } else {
+      btn.className = "btn btn-step";
+      btn.innerHTML = `<span class="scenario-step-number">${step.step}</span>${step.label}`;
+      btn.addEventListener("click", async () => {
+        await sendEvent(step.eventType);
+        markStepDone(step.step);
+      });
+    }
+
+    primaryContainer.appendChild(btn);
+  });
+
+  SECONDARY_ACTIONS.forEach(({ label, eventType }) => {
+    const btn = document.createElement("button");
+    btn.type = "button";
+    btn.className = "btn btn-secondary";
+    btn.textContent = label;
+    btn.addEventListener("click", () => sendEvent(eventType));
+    secondaryContainer.appendChild(btn);
   });
 }
 
+/* ── Demo controls ───────────────────────────────────── */
+
 async function handleReset() {
-  setActionError("");
+  showError("");
   try {
     await apiPost("/reset");
-    timeline.length = 0;
+    timeline = [];
+    completedSteps.clear();
+    interventionApplied = false;
+    latestDecision = null;
     newSessionId();
-    updateSessionDisplay();
     renderTimeline();
     resetDecisionCard();
-    document.getElementById("simulation-results").classList.add("hidden");
-    document.getElementById("metrics-panel").classList.add("hidden");
-  } catch (error) {
-    setActionError(error.message);
+    hideInterventionBanner();
+    document.getElementById("simulation-panel").classList.remove("visible");
+    document.getElementById("metrics-panel").classList.remove("visible");
+
+    document.querySelectorAll(".btn-step").forEach((b) => b.classList.remove("done"));
+    updateApplyButton();
+  } catch (err) {
+    showError(err.message);
   }
 }
 
 async function handleSimulate() {
-  setActionError("");
+  showError("");
   try {
     const results = await apiPost("/simulate");
-    timeline.length = 0;
-    renderTimeline();
-    resetDecisionCard();
-    renderSimulationResults(results);
-    document.getElementById("metrics-panel").classList.add("hidden");
-  } catch (error) {
-    setActionError(error.message);
+    const panel = document.getElementById("simulation-panel");
+    panel.classList.add("visible");
+
+    panel.innerHTML =
+      `<p class="card-label">Simulation results</p>` +
+      results
+        .map((item) => {
+          const d = item.final_decision;
+          const act = shouldAct(d);
+          const copy = suggestedCopy(d);
+          const events = (item.event_timeline || [])
+            .map((e) => EVENT_LABELS[e.event_type] || e.event_type)
+            .join(" → ");
+          return `<article class="simulation-item">
+            <h3>${item.simulation_name.replace(/_/g, " ").replace(/\b\w/g, (c) => c.toUpperCase())}</h3>
+            <p>Events: ${events}</p>
+            <p class="sim-action">${act ? "Should act" : "No action"} — ${formatAction(d.recommended_action)}</p>
+            <p>${d.reason}</p>
+            ${copy ? `<p><em>"${copy}"</em></p>` : ""}
+          </article>`;
+        })
+        .join("");
+  } catch (err) {
+    showError(err.message);
   }
 }
 
 async function handleMetrics() {
-  setActionError("");
+  showError("");
   try {
-    const metrics = await apiGet("/metrics");
-    renderMetrics(metrics);
-  } catch (error) {
-    setActionError(error.message);
+    const m = await apiGet("/metrics");
+    const panel = document.getElementById("metrics-panel");
+    panel.classList.add("visible");
+
+    const boxes = [
+      { name: "Total sessions", value: m.total_sessions },
+      { name: "Total events", value: m.total_events },
+      { name: "Actions recommended", value: m.actions_recommended },
+      { name: "Discounts blocked", value: m.discounts_blocked },
+      { name: "Purchases", value: m.purchases },
+      { name: "Exits", value: m.exits },
+    ];
+
+    const actionItems = Object.entries(m.action_type_counts || {})
+      .map(([k, v]) => `<li>${formatAction(k)}: ${v}</li>`)
+      .join("");
+    const hesiItems = Object.entries(m.hesitation_reason_counts || {})
+      .map(([k, v]) => `<li>${HESITATION_LABELS[k] || k}: ${v}</li>`)
+      .join("");
+
+    panel.innerHTML = `
+      <p class="card-label">Backend metrics</p>
+      <div class="metrics-grid">
+        ${boxes.map((b) => `<div class="metric-box"><span class="value">${b.value}</span><span class="name">${b.name}</span></div>`).join("")}
+      </div>
+      <div class="metrics-subsection">
+        <h4>Action types</h4>
+        <ul>${actionItems || "<li>None</li>"}</ul>
+      </div>
+      <div class="metrics-subsection">
+        <h4>Hesitation reasons</h4>
+        <ul>${hesiItems || "<li>None</li>"}</ul>
+      </div>`;
+  } catch (err) {
+    showError(err.message);
   }
 }
 
+/* ── Init ────────────────────────────────────────────── */
+
 function init() {
-  updateSessionDisplay();
-  buildActionButtons();
+  getSessionId();
+  buildButtons();
   document.getElementById("btn-reset").addEventListener("click", handleReset);
   document.getElementById("btn-simulate").addEventListener("click", handleSimulate);
   document.getElementById("btn-metrics").addEventListener("click", handleMetrics);
