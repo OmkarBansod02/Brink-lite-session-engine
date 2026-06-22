@@ -237,6 +237,12 @@ function renderDecision(decision) {
   if (sessionTerminal) {
     document.getElementById("metric-guardrail").textContent =
       "Not evaluated — session already converted/exited";
+  } else if (
+    decision.recommended_action === "no_action" &&
+    decision.reason?.includes("intervention has already been shown")
+  ) {
+    document.getElementById("metric-guardrail").textContent =
+      "Not evaluated — intervention already shown in this session.";
   } else {
     document.getElementById("metric-guardrail").textContent = formatGuardrail(decision.guardrail);
   }
