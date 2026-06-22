@@ -1,0 +1,92 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Brink Lite — Premium Linen Shirt</title>
+  <link rel="stylesheet" href="/style.css">
+</head>
+<body>
+  <header class="site-header">
+    <div class="header-inner">
+      <div>
+        <p class="eyebrow">Brink Lite Session Engine · Phase 3 Demo</p>
+        <h1>Live storefront event capture</h1>
+      </div>
+      <div class="session-badge">
+        <span class="label">Session</span>
+        <code id="session-id-display">—</code>
+      </div>
+    </div>
+    <p class="header-note">
+      Every button click sends a real event to <code>POST /events</code> on the Python backend.
+      The decision card updates from the live API response.
+    </p>
+  </header>
+
+  <main class="layout">
+    <section class="card product-card">
+      <p class="product-label">Product page</p>
+      <h2>Premium Linen Shirt</h2>
+      <p class="price">₹2,499</p>
+      <p class="description">
+        Breathable European linen with a relaxed tailored fit. Lightweight for warm days,
+        structured enough for evenings out.
+      </p>
+      <ul class="trust-badges">
+        <li>Free returns</li>
+        <li>Fast shipping</li>
+        <li>Size help available</li>
+      </ul>
+      <p class="meta">Product ID: <code>premium-linen-shirt</code> · Margin: 58%</p>
+    </section>
+
+    <section class="card decision-card" id="decision-card">
+      <p class="product-label">Brink Lite decision</p>
+      <div id="decision-status" class="decision-status idle">
+        <span id="decision-status-label">Waiting for first event</span>
+      </div>
+      <p id="decision-action" class="decision-action">—</p>
+      <p id="decision-reason" class="decision-reason">Click a shopper action to see the backend decision.</p>
+      <div id="copy-banner" class="copy-banner hidden">
+        <p class="copy-banner-label">Suggested copy preview</p>
+        <p id="copy-banner-text"></p>
+      </div>
+      <dl class="decision-metrics" id="decision-metrics">
+        <div><dt>Intent score</dt><dd id="metric-intent-score">—</dd></div>
+        <div><dt>Intent level</dt><dd id="metric-intent-level">—</dd></div>
+        <div><dt>Hesitation</dt><dd id="metric-hesitation">—</dd></div>
+        <div><dt>Confidence</dt><dd id="metric-confidence">—</dd></div>
+        <div><dt>Guardrail</dt><dd id="metric-guardrail">—</dd></div>
+      </dl>
+    </section>
+
+    <section class="card actions-card">
+      <p class="product-label">Shopper actions</p>
+      <p class="section-hint">Each click → real backend event</p>
+      <div class="action-grid" id="action-buttons"></div>
+      <p id="action-error" class="error hidden"></p>
+    </section>
+
+    <section class="card timeline-card">
+      <p class="product-label">Event timeline</p>
+      <ol id="event-timeline" class="timeline">
+        <li class="timeline-empty">No events yet.</li>
+      </ol>
+    </section>
+
+    <section class="card demo-card">
+      <p class="product-label">Demo controls</p>
+      <div class="demo-buttons">
+        <button type="button" class="btn btn-secondary" id="btn-reset">Reset session</button>
+        <button type="button" class="btn btn-secondary" id="btn-simulate">Run simulated journeys</button>
+        <button type="button" class="btn btn-secondary" id="btn-metrics">Refresh metrics</button>
+      </div>
+      <div id="simulation-results" class="simulation-results hidden"></div>
+      <div id="metrics-panel" class="metrics-panel hidden"></div>
+    </section>
+  </main>
+
+  <script src="/app.js"></script>
+</body>
+</html>
