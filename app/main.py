@@ -1,9 +1,11 @@
 """FastAPI interface for the brink-lite session decision engine."""
 
 from collections import Counter
+from pathlib import Path
 from typing import Any
 
 from fastapi import FastAPI, HTTPException
+from fastapi.staticfiles import StaticFiles
 
 from app.decision_engine import DecisionEngine
 from app.models import (
@@ -92,3 +94,8 @@ def reset() -> dict[str, str]:
 @app.get("/health")
 def health() -> dict[str, str]:
     return {"status": "ok"}
+
+
+_STATIC_DIR = Path(__file__).resolve().parent.parent / "static"
+if _STATIC_DIR.is_dir():
+    app.mount("/", StaticFiles(directory=_STATIC_DIR, html=True), name="static")
